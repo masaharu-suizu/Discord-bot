@@ -1,10 +1,17 @@
-import json
 import os
+import json
+import base64
 import requests
 from datetime import datetime
 import yfinance as yf
 
 DISCORD_WEBHOOK_URL = os.environ["DISCORD_WEBHOOK_URL"]
+PRICES_JSON_BASE64 = os.environ["PRICES_JSON_BASE64"]
+
+
+def load_prices() -> dict:
+    decoded = base64.b64decode(PRICES_JSON_BASE64).decode("utf-8")
+    return json.loads(decoded)
 
 
 def get_prices(symbol: str) -> tuple[float, float]:
@@ -14,10 +21,10 @@ def get_prices(symbol: str) -> tuple[float, float]:
     if len(hist) < 2:
         raise RuntimeError(f"価格データ不足: {symbol}")
 
-    prev_close = hist.iloc[-2]["Close"]
-    close = hist.iloc[-1]["Close"]
+    prev_close = float(hist.iloc[-2]["Close"])
+    close = float(hist.iloc[-1]["Close"])
 
-    return float(close), float(prev_close)
+    return close, prev_close
 
 
 def send_discord(message: str):
@@ -27,15 +34,14 @@ def send_discord(message: str):
 
 
 def main():
-    with open("data.json", encoding="utf-8") as f:
-        stocks = json.load(f)
+    stocks = load_prices()
 
     today = datetime.now().strftime("%Y-%m-%d")
     lines = [f"📊 株価終値チェック ({today})\n"]
 
     total_assets = 0
-    total_cost = 0
     total_prev_assets = 0
+    total_cost = 0
 
     for symbol, info in stocks.items():
         name = info["name"]
@@ -48,36 +54,36 @@ def main():
         prev_asset = prev_close * units
         cost = buy_price * units
 
-        diff = close - buy_price
-        prev_diff = close - prev_close
+        diff_buy = close - buy_price
+        diff_prev = close - prev_close
 
-        profit_icon = "🟢" if diff >= 0 else "🔴"
-        sign_diff = "+" if diff >= 0 else ""
-        sign_prev = "+" if prev_diff >= 0 else ""
+        profit_icon = "🟢" if diff_buy >= 0 else "🔴"
+        sign_buy = "+" if diff_buy >= 0 else ""
+        sign_prev = "+" if diff_prev >= 0 else ""
 
         lines.append(
             f"{symbol} ({name})\n"
             f"  購入価格: {buy_price:,.0f}円\n"
             f"  終値: {close:,.0f}円 "
-            f"(購入比: {sign_diff}{diff:,.0f}円、"
-            f"前日比: {sign_prev}{prev_diff:,.0f}円)\n"
+            f"(購入比: {sign_buy}{diff_buy:,.0f}円、"
+            f"前日比: {sign_prev}{diff_prev:,.0f}円)\n"
             f"  資産額: {asset:,.0f}円 {profit_icon}\n"
         )
 
         total_assets += asset
-        total_cost += cost
         total_prev_assets += prev_asset
+        total_cost += cost
 
-    total_diff = total_assets - total_cost
+    total_profit = total_assets - total_cost
     total_prev_diff = total_assets - total_prev_assets
 
-    sign_total = "+" if total_diff >= 0 else ""
+    sign_total = "+" if total_profit >= 0 else ""
     sign_prev_total = "+" if total_prev_diff >= 0 else ""
 
     # 気分アイコン判定
-    if total_diff >= 0 and total_prev_diff >= 0:
+    if total_profit >= 0 and total_prev_diff >= 0:
         mood = "😊"
-    elif total_diff < 0 and total_prev_diff < 0:
+    elif total_profit < 0 and total_prev_diff < 0:
         mood = "😱"
     else:
         mood = "😐"
@@ -87,7 +93,7 @@ def main():
         f"{mood} 総資産サマリー\n"
         f"📦 総資産額: {total_assets:,.0f}円 "
         f"(前日比: {sign_prev_total}{total_prev_diff:,.0f}円)\n"
-        f"📈 評価損益: {sign_total}{total_diff:,.0f}円"
+        f"📈 評価損益: {sign_total}{total_profit:,.0f}円"
     )
 
     send_discord("\n".join(lines))
