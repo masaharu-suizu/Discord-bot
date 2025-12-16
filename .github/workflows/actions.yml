@@ -23,5 +23,6 @@ jobs:
       - name: Run script for bot
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          PRICES_JSON_BASE64:  ${{ secrets.PRICES_JSON_BASE64 }}
         run: uv run main.py
 
