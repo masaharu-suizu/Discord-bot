@@ -1,0 +1,31 @@
+name: Weekly Report
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 毎週金曜日
+    # 18:05 JST = 9:05 UTC
+    - cron: '5 9 * * 5'
+
+jobs:
+  run-weekly-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: |
+          uv sync
+
+      - name: Run weekly report
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          ASSETS_JSON_BASE64: ${{ secrets.ASSETS_JSON_BASE64 }}
+        run: |
+          uv run weekly_report.py
+
