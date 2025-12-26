@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from common import load_prices, get_prices, send_discord
 
 
@@ -6,35 +6,57 @@ def main():
     today = datetime.now()
 
     stocks = load_prices()
-    week_start = today - timedelta(days=4)
 
     total_now = 0
-    total_week_start = 0
+    total_prev_week = 0
 
-    lines = [f"📅 週間レポート ({week_start:%m/%d} → {today:%m/%d})\n"]
+    lines = [
+        "📅 週間レポート（前週比）",
+        f"🗓 実行日: {today:%Y/%m/%d}",
+        ""
+    ]
 
     for symbol, info in stocks.items():
-        hist = get_prices(symbol, period="7d")
-        week_open = float(hist.iloc[0]["Close"])
-        close = float(hist.iloc[-1]["Close"])
-
+        name = info["name"]
         units = info["unit"]
 
-        total_week_start += week_open * units
-        total_now += close * units
+        # 余裕を持って 20 営業日分取得
+        hist = get_prices(symbol, period="20d")
 
-    diff = total_now - total_week_start
-    icon = "🚀" if diff >= 0 else "📉"
+        # 日付順に並んでいる前提（yfinanceは基本OK）
+        closes = hist["Close"]
 
-    lines.append(
-        "―――――――――――――\n"
-        f"{icon} 週間収支\n"
-        f"📊 週初比: {diff:+,.0f}円"
-    )
+        # 今週の最終取引日（直近）
+        now_price = float(closes.iloc[-1])
+
+        # 前週の最終取引日
+        # 「5営業日前より前」の最後の値を使う
+        prev_week_price = float(closes.iloc[-6])
+
+        total_now += now_price * units
+        total_prev_week += prev_week_price * units
+
+        diff = (now_price - prev_week_price) * units
+        icon = "📈" if diff >= 0 else "📉"
+
+        lines.append(
+            f"{icon} {name}\n"
+            f"　前週比: {diff:+,.0f}円"
+        )
+
+    total_diff = total_now - total_prev_week
+    mood_icon = "🚀" if total_diff > 0 else "😇" if total_diff == 0 else "😱"
+
+    lines.extend([
+        "",
+        "―――――――――――――",
+        f"{mood_icon} 総資産サマリー",
+        f"📦 総資産額: {total_now:,.0f}円",
+        f"📊 前週比: {total_diff:+,.0f}円",
+    ])
 
     send_discord("\n".join(lines))
 
 
 if __name__ == "__main__":
     main()
-
