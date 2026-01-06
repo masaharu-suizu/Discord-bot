@@ -1,8 +1,31 @@
 from datetime import datetime
 from common import load_prices, get_prices, send_discord
+import jpholiday
+
+def is_market_open(today):
+    """市場が開いているか判定する関数"""
+    # 1. 土日チェック
+    if today.weekday() >= 5:
+        return False
+
+    # 2. 祝日チェック
+    if jpholiday.is_holiday(today):
+        return False
+
+    # 3. 年末年始チェック (12/31-1/3は休場)
+    if (today.month == 12 and today.day == 31) or (today.month == 1 and today.day <= 3):
+        return False
+
+    return True
 
 
 def main():
+    today = datetime.date.today()
+
+    if not is_market_open(today):
+        print(f"{today} is market holiday. Skip report.")
+        return
+
     stocks = load_prices()
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -63,4 +86,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
